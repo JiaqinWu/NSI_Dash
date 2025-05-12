@@ -25,13 +25,6 @@ with open("geojson_data.geojson") as f:
 # Sidebar for filters
 st.sidebar.header("Selection to Filter Data")
 
-### Filter by Safety Tier
-all_tiers = df['Safety_Tier'].unique().tolist()
-selected_tiers = st.sidebar.multiselect(
-    "Select Safety Tier(s)",
-    all_tiers,
-    default=all_tiers 
-)
 
 ### Filter by Safety Index range
 min_safety_index = df['Safety_Index'].min()
@@ -44,23 +37,10 @@ safety_index_range = st.sidebar.slider(
 )
 
 # Apply filters
-filtered_df = df[df['Safety_Tier'].isin(selected_tiers)]
-filtered_df = filtered_df[(filtered_df['Safety_Index'] >= safety_index_range[0]) & (filtered_df['Safety_Index'] <= safety_index_range[1])]
+filtered_df = df[(df['Safety_Index'] >= safety_index_range[0]) & (df['Safety_Index'] <= safety_index_range[1])]
 
 
 # Create Visualizations
-# Distribution of Top Domain
-if not filtered_df.empty:
-    st.subheader("Distribution of Top Risk Domain")
-    fig_top_domain = px.bar(
-        filtered_df['Top_Domain'].value_counts().reset_index(name='count'),
-        x='Top_Domain', 
-        y='count',
-        labels={'Top_Domain': 'Top Risk Domain', 'count': 'Number of Tracts'}
-    )
-    st.plotly_chart(fig_top_domain, use_container_width=True)
-
-
 # Folium Map
 st.subheader("Census Tract Neighborhood Safety Map")
 
