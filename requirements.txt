@@ -3,3 +3,4 @@ folium
 plotly
 geopandas
 matplotlib
+streamlit_folium
