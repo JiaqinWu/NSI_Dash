@@ -18,7 +18,7 @@ with open("geojson_data.geojson") as f:
     prince_william_tracts = json.load(f)
 
 # Load the shapefile
-gdf_shp = gpd.read_file("Demographic_files/tl_2024_51_tract.shp")
+#gdf_shp = gpd.read_file("Demographic_files/tl_2024_51_tract.shp")
 
 # Sidebar for filters
 st.sidebar.header("Selection to Filter Data")
