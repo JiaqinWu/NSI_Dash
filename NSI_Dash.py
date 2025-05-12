@@ -96,52 +96,38 @@ for key in list(choropleth._children):
 
 choropleth.add_to(m)
 
-
-thresholds = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-
-colors = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090',
-    '#ffffbf', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4']
-
+thresholds = threshold_scale
 legend_labels = [
     '0-2', '2-4', '4-6', '6-8', '8-10',
     '10-12', '12-14', '14-16', '16-18', '18+'
 ]
-
 cmap = plt.get_cmap('RdYlGn')
 norm = mcolors.Normalize(vmin=thresholds[0], vmax=thresholds[-1])
-# Use the upper boundary of each bin for sampling colors
-bin_boundaries = thresholds[1:]
-html_legend_colors = [mcolors.rgb2hex(cmap(norm(boundary))) for boundary in bin_boundaries]
+html_legend_colors = [mcolors.rgb2hex(cmap(norm(t))) for t in thresholds[1:]]
 
 legend_html = """
-     <div style="position: fixed;
-                 bottom: 100px; right: 20px; width: 150px; z-index:9999; font-size:14px;
-                 background-color:rgba(30, 30, 30, 0.8);
-                 color: white;
-                 border:1px solid #888;
-                 border-radius: 5px;
-                 padding: 10px;">
-         <b>Safety Index</b> <br>
-         <span style="font-size:12px;">(higher = safer)</span> <br>
-         &nbsp;
-""" # Added Safety Index title and subtitle here
-
-# Add the color blocks and labels dynamically based on generated colors and labels
+    <div style="position: fixed;
+                bottom: 100px; right: 20px; width: 160px; z-index:9999; font-size:13px;
+                background-color:rgba(30, 30, 30, 0.8);
+                color: white;
+                border:1px solid #888;
+                border-radius: 5px;
+                padding: 10px;">
+        <b>Safety Index</b><br>
+        <span style="font-size:12px;">(higher = safer)</span><br><br>
+"""
 for i in range(len(html_legend_colors)):
     legend_html += f"""
-    <div style="display: flex; align-items: center; margin-bottom: 4px;">
-        <div style="background:{html_legend_colors[i]};
-                    width:18px; height:18px;
-                    margin-right:8px; opacity:0.9;"></div>
-        <span style="flex: 1;">{legend_labels[i]}</span>
-    </div>
+        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+            <div style="background:{html_legend_colors[i]};
+                        width:18px; height:18px;
+                        margin-right:8px; opacity:0.9;"></div>
+            <span style="flex: 1;">{legend_labels[i]}</span>
+        </div>
     """
+legend_html += "</div>"
 
-legend_html += """
-     </div>
-"""
-
-# Add the custom HTML legend to the map
+# Add custom legend to map
 m.get_root().html.add_child(folium.Element(legend_html))
 
 
