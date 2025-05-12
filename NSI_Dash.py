@@ -94,6 +94,7 @@ choropleth.add_to(m)
 for key in choropleth._children:
     if key.startswith('color_map'):
         del(m._children[key])
+choropleth.add_to(m)
 
 thresholds = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
