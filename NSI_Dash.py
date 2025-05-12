@@ -7,6 +7,8 @@ import geopandas as gpd
 import json
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from branca.element import Template, MacroElement
+
 
 # Set up the Streamlit page 
 st.set_page_config(layout="wide") # Use wide layout for better use of space
@@ -105,30 +107,45 @@ cmap = plt.get_cmap('RdYlGn')
 norm = mcolors.Normalize(vmin=thresholds[0], vmax=thresholds[-1])
 html_legend_colors = [mcolors.rgb2hex(cmap(norm(t))) for t in thresholds[1:]]
 
-legend_html = """
-    <div style="position: fixed;
-                bottom: 100px; right: 20px; width: 160px; z-index:9999; font-size:13px;
-                background-color:rgba(30, 30, 30, 0.8);
-                color: white;
-                border:1px solid #888;
-                border-radius: 5px;
-                padding: 10px;">
-        <b>Safety Index</b><br>
-        <span style="font-size:12px;">(higher = safer)</span><br><br>
+legend_template = """
+{% macro html(this, kwargs) %}
+<div style="
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    width: 160px;
+    z-index: 9999;
+    font-size: 13px;
+    background-color: rgba(30, 30, 30, 0.8);
+    color: white;
+    border: 1px solid #888;
+    border-radius: 5px;
+    padding: 10px;
+">
+<b>Safety Index</b><br>
+<span style="font-size:12px;">(higher = safer)</span><br><br>
+{% for color, label in legend_data %}
+    <div style="display: flex; align-items: center; margin-bottom: 4px;">
+        <div style="background: {{ color }};
+                    width: 18px; height: 18px;
+                    margin-right: 8px; opacity: 0.9;"></div>
+        <span style="flex: 1;">{{ label }}</span>
+    </div>
+{% endfor %}
+</div>
+{% endmacro %}
 """
-for i in range(len(html_legend_colors)):
-    legend_html += f"""
-        <div style="display: flex; align-items: center; margin-bottom: 4px;">
-            <div style="background:{html_legend_colors[i]};
-                        width:18px; height:18px;
-                        margin-right:8px; opacity:0.9;"></div>
-            <span style="flex: 1;">{legend_labels[i]}</span>
-        </div>
-    """
-legend_html += "</div>"
 
-# Add custom legend to map
-m.get_root().html.add_child(folium.Element(legend_html))
+# Prepare the data
+legend_data = list(zip(html_legend_colors, legend_labels))
+
+# Inject into map via MacroElement
+template = Template(legend_template)
+template.render(legend_data=legend_data)
+
+macro = MacroElement()
+macro._template = template
+m.get_root().add_child(macro)
 
 
 
