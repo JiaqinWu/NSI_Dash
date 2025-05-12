@@ -97,16 +97,16 @@ for key in list(choropleth._children):
         del choropleth._children[key]
 
 choropleth.add_to(m)
-
+# Build legend data
 thresholds = threshold_scale
-legend_labels = [
-    '0-2', '2-4', '4-6', '6-8', '8-10',
-    '10-12', '12-14', '14-16', '16-18', '18+'
-]
+legend_labels = ['0-2', '2-4', '4-6', '6-8', '8-10',
+                 '10-12', '12-14', '14-16', '16-18', '18+']
 cmap = plt.get_cmap('RdYlGn')
 norm = mcolors.Normalize(vmin=thresholds[0], vmax=thresholds[-1])
 html_legend_colors = [mcolors.rgb2hex(cmap(norm(t))) for t in thresholds[1:]]
+legend_data = list(zip(html_legend_colors, legend_labels))
 
+# Legend HTML macro
 legend_template = """
 {% macro html(this, kwargs) %}
 <div style="
@@ -124,7 +124,7 @@ legend_template = """
 ">
 <b>Safety Index</b><br>
 <span style="font-size:12px;">(higher = safer)</span><br><br>
-{% for color, label in legend_data %}
+{% for color, label in this.kwargs.legend_data %}
     <div style="display: flex; align-items: center; margin-bottom: 4px;">
         <div style="background: {{ color }};
                     width: 18px; height: 18px;
@@ -136,17 +136,12 @@ legend_template = """
 {% endmacro %}
 """
 
-# Prepare the data
-legend_data = list(zip(html_legend_colors, legend_labels))
-
-# Inject into map via MacroElement
+# Create macro element
 template = Template(legend_template)
-template.render(legend_data=legend_data)
-
 macro = MacroElement()
 macro._template = template
+macro.kwargs = {"legend_data": legend_data} 
 m.get_root().add_child(macro)
-
 
 
 # Display the map
