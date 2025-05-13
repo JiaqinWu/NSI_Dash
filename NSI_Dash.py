@@ -862,10 +862,14 @@ if 'geometry' in merged_data.columns:
 
                 // Add place labels with modern styling
                 var placeLabels = [
-                    {{name: "Woodbridge", location: [38.668, -77.295]}},
-                    {{name: "Dale City", location: [38.637, -77.313]}},
-                    {{name: "Manassas", location: [38.751, -77.475]}},
-                    {{name: "Dumfries", location: [38.567, -77.329]}}
+                    {{name: "Woodbridge", location: [38.658, -77.295]}},
+                    {{name: "Dale City", location: [38.637, -77.313]}},
+                    {{name: "Lake Ridge", location: [38.683, -77.301]}},
+                    {{name: "Manassas", location: [38.751, -77.475]}},
+                    {{name: "Dumfries", location: [38.567, -77.329]}},
+                    {{name: "Gainesville", location: [38.796, -77.614]}},
+                    {{name: "Occoquan", location: [38.684, -77.260]}},
+                    {{name: "Haymarket", location: [38.812, -77.636]}}
                 ];
 
                 // Add the place labels to the map with modern styling
