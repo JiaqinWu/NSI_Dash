@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from folium.plugins import MeasureControl
 import streamlit.components.v1 as components
-import os
 
 # Set up the Streamlit page 
 #st.image("static/logo2.png", width=200)
@@ -85,14 +84,7 @@ if 'GEOID' not in filtered_df.columns:
 census_tracts["GEOID"] = census_tracts["GEOID"].astype(str)
 filtered_df["GEOID"] = filtered_df["GEOID"].astype(str)
 
-# Folium Map
-st.subheader("Census Tract Neighborhood Safety Map")
-
-st.info("Starting geographic visualization process...")
-
-# Ensure variable_name_map is defined BEFORE this section
 # Dictionary for variable name mapping (to make them more readable)
-# If you haven't defined this earlier in your script, add it here:
 variable_name_map = {
     # Socioeconomic
     "LOWINCPCT": "Low Income Population",
@@ -175,260 +167,108 @@ variable_name_map = {
     "Homeless": "Homelessness Calls",
     "Shootings": "Shooting Incidents",
     "Stabbings": "Stabbing Incidents",
-    "Assaults": "Assault Incidents",
-
-    # Demographics
-    "PEOPCOLORPCT": "Percentage of People with Color",
-    "LOWINCPCT": "Percentage of People with Low Income",
-    "UNEMPPCT": "Percentage of Unemployed People",
-    "DISABILITYPCT": "Percentage of People with Disability",
-    "UNDER5PCT": "Percentage of People Under 5",
-    "OVER64PCT": "Percentage of People Over 64"
+    "Assaults": "Assault Incidents"
 }
 
-# Make sure format_percentage is defined BEFORE this section
-# Function to format percentages
-def format_percentage(val):
-    if pd.isna(val):
-        return "N/A"
-    try:
-        numeric_val = float(val)
-        # Check if the value is extremely small (close to zero but not NaN)
-        # Sometimes float conversion results in very small numbers instead of 0
-        if abs(numeric_val) < 1e-9: # Use a small tolerance
-             return "0.00%"
-        return f"{round(numeric_val * 100, 2)}%"
-    except (ValueError, TypeError):
-        return "N/A" # Handle cases where conversion to float fails
 
-# Make sure get_readable_name is defined BEFORE this section
 # Function to get a readable variable name
 def get_readable_name(var_name):
     return variable_name_map.get(var_name, var_name.replace('_', ' '))
-
-
-# Load the shapefile
-try:
-    st.info("Loading shapefile: Demographic_files/tl_2024_51_tract.shp")
-    census_tracts = gpd.read_file("Demographic_files/tl_2024_51_tract.shp")
-    st.info(f"Shapefile loaded successfully. Number of tracts: {len(census_tracts)}")
-except Exception as e:
-    st.error(f"Error loading shapefile: {e}")
-    st.stop() # Stop execution if shapefile can't be loaded
-
-
-# Ensure Tract_ID and GEOID are string type for matching
-st.info(f"Number of rows in filtered_df before GEOID check: {len(filtered_df)}")
-if 'Tract_ID' in filtered_df.columns:
-     filtered_df["GEOID"] = filtered_df["Tract_ID"].astype(str)
-     st.info("Ensured 'GEOID' column exists and is string type in filtered data.")
-else:
-     st.error("Column 'Tract_ID' not found in the filtered data. Cannot proceed with merging.")
-     st.stop() # Stop execution if Tract_ID is missing
-
-
-if 'GEOID' in census_tracts.columns:
-    census_tracts["GEOID"] = census_tracts["GEOID"].astype(str)
-    st.info("Ensured 'GEOID' column is string type in census tracts.")
-else:
-     st.error("Column 'GEOID' not found in census tracts shapefile. Cannot proceed with merging.")
-     st.stop() # Stop execution if GEOID is missing in shapefile
-
 
 # Filter census tracts to just Prince William County if needed (COUNTYFP = 153 for Prince William)
 if 'COUNTYFP' in census_tracts.columns:
     # Check if there are any PWC tracts in the data
     pwc_tracts = census_tracts[census_tracts['COUNTYFP'] == '153']
     if len(pwc_tracts) > 0:
-        st.info(f"Filtering census tracts to {len(pwc_tracts)} Prince William County tracts (COUNTYFP = '153').")
+        print(f"Filtering census tracts to {len(pwc_tracts)} Prince William County tracts")
         census_tracts = pwc_tracts
     else:
-        st.warning("No Prince William County tracts found in the shapefile with COUNTYFP '153'. Check shapefile data.")
-else:
-    st.warning("COUNTYFP column not found in shapefile. Skipping Prince William County filter.")
+        print("Warning: No Prince William County tracts found in the shapefile with COUNTYFP '153'. Check shapefile data.")
 
 
 # Merge data
-st.info(f"Attempting to merge filtered data ({len(filtered_df)} rows) with census tracts ({len(census_tracts)} rows) on 'GEOID'...")
+print("Merging data with boundaries...")
 merged_data = filtered_df.merge(
     census_tracts,
     on="GEOID",
     how="left"
 )
-st.info(f"Merge completed. Rows in merged_data: {len(merged_data)}")
-
 
 # Convert to GeoDataFrame
 # Check if geometry column exists before converting
 if 'geometry' in merged_data.columns:
-    st.info("Geometry column found. Converting merged data to GeoDataFrame.")
     merged_data = gpd.GeoDataFrame(merged_data, geometry='geometry')
 
-    # Check for missing merges (rows from filtered_df that didn't find a matching geometry)
-    missing_geometries_count = merged_data.geometry.isna().sum() # Use sum() to count True values
-    st.info(f"Checking for missing geometries after merge. Unmatched tracts: {missing_geometries_count}")
-
+    # Check for missing merges
+    missing = merged_data.loc[merged_data.geometry.isna()].shape[0]
+    print(f"\nUnmatched tracts (missing geometry): {missing}")
 
     # If there are missing geometries, they can't be mapped
-    if missing_geometries_count > 0:
-        st.warning(f"{missing_geometries_count} census tracts couldn't be matched to shapefile geometries and will be dropped for mapping.")
-        # Keep only rows with valid geometry
-        merged_data = merged_data.dropna(subset=['geometry']).reset_index(drop=True) # Reset index after dropping
-        st.info(f"Rows remaining with valid geometry after dropping missing ones: {len(merged_data)}")
+    if missing > 0:
+        print("Warning: Some census tracts couldn't be matched to shapefile geometries and will not be mapped.")
+        merged_data = merged_data.dropna(subset=['geometry'])
 
-    # Check if there's data left to map after dropping missing geometries
+    # Create a dictionary to prepare our tract data for JavaScript
+    # This part will only run if merged_data is not empty after dropping NaNs
     if not merged_data.empty:
-        st.info(f"Merged data contains {len(merged_data)} rows with valid geometry. Proceeding to create map HTML.")
-
-        # Create a dictionary to prepare our tract data for JavaScript
         tract_data = {}
-        # Iterate over rows *with valid geometry*
         for idx, row in merged_data.iterrows():
             # Use GEOID from the merged_data which should align with the shapefile
-            tract_id = row['GEOID'] # Use GEOID which is common after merge
+            tract_id = row['GEOID']
 
-            # --- Demographic Data ---
-            demographic_vars = [
-                "PEOPCOLORPCT", "LOWINCPCT", "UNEMPPCT",
-                "DISABILITYPCT", "UNDER5PCT", "OVER64PCT"
-            ]
-            demographics = {}
-            for var in demographic_vars:
-                 # Check if column exists and value is notna before adding
-                # Use row.get(var) with a default to avoid KeyError if column is entirely missing
-                val = row.get(var)
-                if pd.notna(val):
-                    demographics[get_readable_name(var)] = format_percentage(val)
-                # Optional: Add placeholder if column is expected but value is missing for a specific tract
-                # elif var in demographic_vars: # If you expect all 6 demographic columns in the data
-                #     demographics[get_readable_name(var)] = "N/A"
-
-
-            # --- Domain rankings ---
+            # Domain rankings
             domain_ranks = {}
             domains = ['Socioeconomic', 'Housing', 'Transportation', 'TransportationSafety', 'Environmental', 'PublicHealth']
             for domain in domains:
                 rank_col = f"{domain}_Rank"
-                # Check if rank column exists and value is notna before processing
-                rank_value = row.get(rank_col)
-                if pd.notna(rank_value):
+                if rank_col in row and pd.notna(row[rank_col]):
                     try:
-                        # Attempt conversion, handle potential errors
-                        domain_ranks[domain] = int(rank_value)
-                    except (ValueError, TypeError) as e:
-                        domain_ranks[domain] = None # Handle conversion errors
-                        print(f"Warning: Could not convert rank for tract {tract_id}, domain {domain} to integer: {rank_value} - Error: {e}")
-                # Optional: add a placeholder if the rank column is expected but missing
-                # elif rank_col in row.index: # If you expect all of them to be there
-                #      domain_ranks[domain] = "N/A"
+                        domain_ranks[domain] = int(row[rank_col])
+                    except ValueError:
+                        # Handle cases where rank might not be a valid integer
+                        domain_ranks[domain] = None
+                        print(f"Warning: Could not convert rank for tract {tract_id}, domain {domain} to integer: {row[rank_col]}")
 
 
-            # --- Top variables by domain ---
+            # Top variables by domain
             domain_variables = {}
-            domains_for_vars = ['Socioeconomic', 'Housing', 'Transportation', 'TransportationSafety', 'Environmental', 'PublicHealth'] # Assuming these domains have top variables
-            for domain in domains_for_vars:
-                domain_vars_list = []
+            for domain in domains:
+                domain_vars = []
                 for i in range(1, 4):
                     var_col = f"{domain}_Var{i}"
-                    # Check if variable column exists and value is notna/not empty string
-                    var_value = row.get(var_col)
-                    if pd.notna(var_value) and str(var_value).strip() != '':
-                        domain_vars_list.append(get_readable_name(var_value))
-                if domain_vars_list:
-                    domain_variables[domain] = domain_vars_list
+                    if var_col in row and pd.notna(row[var_col]) and row[var_col]:
+                        domain_vars.append(get_readable_name(row[var_col]))
+                if domain_vars:
+                    domain_variables[domain] = domain_vars
 
-
-            # Add all collected data dictionaries/values to the tract_data entry
+            # Add to tract data dictionary
             tract_data[tract_id] = {
-                'safety_index': float(row['Safety_Index']) if 'Safety_Index' in row.index and pd.notna(row['Safety_Index']) else None,
-                'safety_tier': row['Safety_Tier'] if 'Safety_Tier' in row.index and pd.notna(row['Safety_Tier']) else 'N/A',
-                'top_domain': row['Top_Domain'] if 'Top_Domain' in row.index and pd.notna(row['Top_Domain']) else 'N/A',
+                'safety_index': float(row['Safety_Index']) if pd.notna(row['Safety_Index']) else None,
+                'safety_tier': row['Safety_Tier'] if 'Safety_Tier' in row and pd.notna(row['Safety_Tier']) else 'N/A',
+                'top_domain': row['Top_Domain'] if 'Top_Domain' in row and pd.notna(row['Top_Domain']) else 'N/A',
                 'domain_ranks': domain_ranks,
-                'demographics': demographics, # <-- This includes the collected demographics
                 'domain_variables': domain_variables
             }
 
         # Add safety_index to the GeoJSON properties
-        # This adds 'safety_index' directly to the properties dictionary in the GeoJSON output
-        if 'Safety_Index' in merged_data.columns:
-             merged_data['safety_index'] = merged_data['Safety_Index']
-             st.info("Added 'safety_index' property to GeoJSON data.")
-        else:
-             st.warning("Safety_Index column not found in merged data for adding to GeoJSON properties.")
-
+        merged_data['safety_index'] = merged_data['Safety_Index']
 
         # Create map file with modern design
-        print("Creating modern safety index map HTML content...")
 
         # Prepare GeoJSON
-        # Check if merged_data still has geometry after processing
-        if 'geometry' in merged_data.columns and not merged_data.empty and not merged_data.geometry.is_empty.all() and not merged_data.geometry.isna().all():
-             try:
-                 geo_data = merged_data.to_json()
-                 st.info("GeoJSON data generated successfully from merged_data.")
-
-                 # Add a check for features in the generated GeoJSON string
-                 import json
-                 try:
-                     geo_data_dict = json.loads(geo_data)
-                     if not geo_data_dict or 'features' not in geo_data_dict or len(geo_data_dict['features']) == 0:
-                          st.warning("GeoJSON data is empty or contains no features after merging. Cannot display map features.")
-                          st.info(f"GeoJSON data snippet: {geo_data[:500]}...") # Show a snippet
-                     else:
-                         st.info(f"GeoJSON data prepared with {len(geo_data_dict['features'])} features.")
-                         # Show snippet of one feature's properties for debugging
-                         if len(geo_data_dict['features']) > 0 and 'properties' in geo_data_dict['features'][0]:
-                             st.info(f"Example feature properties: {geo_data_dict['features'][0]['properties']}")
-
-                 except json.JSONDecodeError:
-                     st.error("Failed to parse generated GeoJSON data string into a dictionary. Check data processing steps.")
-                     st.info(f"Problematic GeoJSON snippet: {geo_data[:500]}...")
-                     geo_data = '{"type": "FeatureCollection", "features": []}' # Provide empty valid GeoJSON
-             except Exception as e:
-                  st.error(f"Error during GeoJSON generation: {e}")
-                  geo_data = '{"type": "FeatureCollection", "features": []}' # Provide empty valid GeoJSON
-        else:
-            st.warning("Merged data is empty or missing/invalid geometry column before GeoJSON generation. Generating empty GeoJSON.")
-            geo_data = '{"type": "FeatureCollection", "features": []}' # Provide empty valid GeoJSON
-
-
-        # Escape single quotes in tract_data_json for JavaScript
-        # Use json.dumps directly as it handles escaping needed for JavaScript string literal
-        tract_data_json = json.dumps(tract_data)
-
+        geo_data = merged_data.to_json()
+        tract_data_json = json.dumps(tract_data).replace("'", "\\'")
 
         # HTML file name
         output_file = "Modern_Safety_Index_Map.html"
 
         # Calculate bounds and center coordinates before writing the file
-        # Ensure merged_data is not empty and has valid geometry before calculating bounds
-        center_lat = 38.668 # Default center for PWC
-        center_lon = -77.3 # Default center for PWC
-        if not merged_data.empty and 'geometry' in merged_data.columns:
-            try:
-                # Check if there are any non-empty, non-null geometries before calculating bounds
-                if not merged_data.geometry.is_empty.all() and not merged_data.geometry.isna().all():
-                     bounds = merged_data.total_bounds
-                     center_lat = (bounds[1] + bounds[3]) / 2
-                     center_lon = (bounds[0] + bounds[2]) / 2
-                     st.info(f"Calculated map center: Lat {center_lat:.4f}, Lon {center_lon:.4f}")
-                else:
-                    st.warning("Merged data geometry column is empty or all null after cleaning. Using default map center.")
+        bounds = merged_data.total_bounds
+        center_lat = (bounds[1] + bounds[3]) / 2
+        center_lon = (bounds[0] + bounds[2]) / 2
 
-            except Exception as e:
-                 st.error(f"Error calculating map bounds: {e}. Using default map center.")
-        else:
-             st.warning("Merged data is empty before calculating bounds. Using default map center.")
-
-
-       # HTML file name
-        output_file = "Modern_Safety_Index_Map.html"
-
-        # Write HTML file with modern design
-        try:
-            with open(output_file, "w", encoding="utf-8") as f:
-                # Write the static HTML head and body structure
-                f.write("""<!DOCTYPE html>
+        with open(output_file, "w") as f:
+            f.write("""<!DOCTYPE html>
             <html>
             <head>
                 <meta charset="utf-8">
@@ -778,15 +618,8 @@ if 'geometry' in merged_data.columns:
 
                 <script>""")
 
-                # Write the dynamic JavaScript variables
-                # Use json.dumps directly as it handles escaping needed for JavaScript string literal
-                f.write(f"\nvar tractDataLookup = {json.dumps(tract_data)};\n")
-                # Corrected from .to_dict('geojson') to .to_json()
-                f.write(f"\nvar geoData = {geo_data};\n") # Directly embed GeoJSON string
-
-
-                # Write the static JavaScript functions and remaining HTML
-                f.write(f"""
+            # Write JavaScript center coordinates
+            f.write(f"""
                 // Initialize map with dark theme
                 var map = L.map('map', {{
                     center: [{center_lat}, {center_lon}],
@@ -891,93 +724,53 @@ if 'geometry' in merged_data.columns:
 
                             <p><strong>Highest Risk Domain:</strong> ${{tractData ? tractData.top_domain : 'N/A'}}</p>
                         </div>
-                        <h3>Demographic Overview</h3>
-                        <table>
-                    `;
 
-                    // Check if demographics exist and are not empty
-                    var demographics = tractData ? tractData.demographics : null;
-                    if (demographics && Object.keys(demographics).length > 0) {{
-                        for (var key in demographics) {{
-                             // Added check for demographics[key] value
-                            if (demographics[key] !== undefined && demographics[key] !== null) {{
-                                 html += `<tr><td><strong>${{{{key}}}}</strong></td><td>${{{{demographics[key]}}}}</td></tr>`;
-                            }} else {{
-                                 html += `<tr><td><strong>${{{{key}}}}</strong></td><td>N/A</td></tr>`;
-                            }}
-                        }}
-                    }} else {{
-                         html += `<tr><td>No demographic data available.</td></tr>`;
-                    }}
-                    html += `</table>`;
-
-                    html += `
                         <h3>Domain Risk Ranking</h3>
-                        <table>
-                    `;
+                        <table>`;
 
                     // Add domain rankings in two columns
                     var domains = tractData ? Object.keys(tractData.domain_ranks) : [];
-                    if (domains.length > 0) {{
-                        for (var i = 0; i < domains.length; i += 2) {{
-                            html += '<tr>';
+                    for (var i = 0; i < domains.length; i += 2) {{
+                        html += '<tr>';
 
-                            // First column
-                            var domain1 = domains[i];
-                            var rank1 = tractData && tractData.domain_ranks && tractData.domain_ranks[domain1] !== null ? tractData.domain_ranks[domain1] : 'N/A';
-                            html += `<td><span class="rank-number">${{rank1}}</span> ${{domain1}}</td>`;
+                        // First column
+                        var domain1 = domains[i];
+                        html += `<td><span class="rank-number">${{tractData.domain_ranks[domain1] !== null ? tractData.domain_ranks[domain1] : 'N/A'}}</span> ${{domain1}}</td>`;
 
-                            // Second column (if exists)
-                            if (i + 1 < domains.length) {{
-                                var domain2 = domains[i+1];
-                                var rank2 = tractData && tractData.domain_ranks && tractData.domain_ranks[domain2] !== null ? tractData.domain_ranks[domain2] : 'N/A';
-                                html += `<td><span class="rank-number">${{rank2}}</span> ${{domain2}}</td>`;
-                            }} else {{
-                                html += '<td></td>';
-                            }}
-                            html += '</tr>';
+                        // Second column (if exists)
+                        if (i + 1 < domains.length) {{
+                            var domain2 = domains[i+1];
+                            html += `<td><span class="rank-number">${{tractData.domain_ranks[domain2] !== null ? tractData.domain_ranks[domain2] : 'N/A'}}</span> ${{domain2}}</td>`;
+                        }} else {{
+                            html += '<td></td>';
                         }}
-                     }} else {{
-                         html += `<tr><td>No domain ranking data available.</td></tr>`;
-                     }}
 
-                    html += `</table>`;
+                        html += '</tr>';
+                    }}
 
-                        html += `
+                    html += `</table>
                             <h3>Top Contributing Variables</h3>`;
 
                     // Add variables by domain
                     var domainVars = tractData ? Object.keys(tractData.domain_variables) : [];
-                    if (domainVars.length > 0) {{
-                        for (var j = 0; j < domainVars.length; j++) {{
-                            var domain = domainVars[j];
-                            var variables = tractData.domain_variables[domain];
+                    for (var j = 0; j < domainVars.length; j++) {{
+                        var domain = domainVars[j];
+                        var variables = tractData.domain_variables[domain];
 
-                             // Check if there are variables listed for this domain and if the list is not empty
-                            if (variables && Array.isArray(variables) && variables.length > 0) {{
-                                html += `
-                                    <div class="domain-section">
-                                        <strong>${{domain}}:</strong>
-                                        <ul>`;
+                        html += `
+                            <div class="domain-section">
+                                <strong>${{domain}}:</strong>
+                                <ul>`;
 
-                                for (var k = 0; k < variables.length; k++) {{
-                                     // Check if the variable name is not empty or null
-                                    if (variables[k]) {{
-                                         html += `<li>${{variables[k]}}</li>`;
-                                    }}
-                                }}
-                                html += `</ul>
-                                    </div>`;
-                            }} else {{
-                                // Message if a domain section exists but has no variables listed
-                                html += `<div class="domain-section"><strong>${{domain}}:</strong> <p>No top variables listed.</p></div>`;
-                            }}
+                        for (var k = 0; k < variables.length; k++) {{
+                            html += `<li>${{variables[k]}}</li>`;
                         }}
-                    }} else {{
-                        html += `<p>No contributing variables data available.</p>`;
+
+                        html += `</ul>
+                            </div>`;
                     }}
 
-                    // If no data found for the tract at all
+                    // If no data found for the tract
                     if (!tractData) {{
                          html = `<div class="welcome-message">No detailed data available for this tract.</div>`;
                     }}
@@ -985,7 +778,7 @@ if 'geometry' in merged_data.columns:
 
                     panelContent.innerHTML = html;
 
-                    // Zoom to feature only if geometry exists for the clicked feature
+                    // Zoom to feature only if geometry exists
                     if (e.target.getBounds) {{
                          map.fitBounds(e.target.getBounds());
                     }} else {{
@@ -1009,25 +802,16 @@ if 'geometry' in merged_data.columns:
 
                 // Load GeoJSON data
                 // Check if geoData exists and has features before adding layer
-                var geoData = {geo_data}; // geoData is already a string from Python's .to_json()
-
-                // Check if geoData string represents a valid GeoJSON with features
-                try {{
-                     var parsedGeoData = JSON.parse(geoData);
-                     if (parsedGeoData && parsedGeoData.features && parsedGeoData.features.length > 0) {{
-                          console.log("GeoJSON data parsed and contains features.");
-                          // Add GeoJSON layer
-                          var geojson = L.geoJSON(parsedGeoData, {{
-                              style: style,
-                              onEachFeature: onEachFeature
-                          }}).addTo(map);
-                     }} else {{
-                         console.warn("GeoJSON data is empty or contains no features to load the map layer.");
-                         // Display a message on the map or console if no data is loaded
-                     }}
-                }} catch (e) {{
-                    console.error("Error parsing GeoJSON data string:", e);
-                    console.warn("Invalid GeoJSON data. Cannot load map layer.");
+                var geoData = {geo_data};
+                if (geoData && geoData.features && geoData.features.length > 0) {{
+                     // Add GeoJSON layer
+                    var geojson = L.geoJSON(geoData, {{
+                        style: style,
+                        onEachFeature: onEachFeature
+                    }}).addTo(map);
+                }} else {{
+                    console.warn("No GeoJSON data or features available to load the map layer.");
+                    // Display a message on the map or console if no data is loaded
                 }}
 
 
@@ -1104,38 +888,27 @@ if 'geometry' in merged_data.columns:
             </script>
             </body>
             </html>""")
-            st.info(f"HTML file '{output_file}' created successfully.")
-
-        except Exception as e:
-            st.error(f"Error writing map HTML file: {e}")
-
 
         # Display the map
         # Ensure the HTML file exists before trying to display it
         import os
         if os.path.exists(output_file):
-            st.info(f"Attempting to display map HTML file: {output_file}")
-            try:
-                with open(output_file, "r", encoding="utf-8") as f:
-                    html_content = f.read()
-                components.html(html_content, width=1000, height=800) # Increased height slightly
-                st.info("Map HTML displayed successfully using components.html.")
-            except Exception as e:
-                 st.error(f"Error displaying map HTML with components.html: {e}")
-                 st.warning("Falling back to st_folium with the output file path...")
-                 try:
-                      # Fallback to st_folium with file path - generally less reliable for complex custom HTML
-                      st_map = st_folium(output_file, width=1000, height=800)
-                      st.info("Map displayed using st_folium with file path.")
-                 except Exception as e_folium:
-                       st.error(f"Error displaying map with st_folium fallback: {e_folium}")
-
+            with open(output_file, "r") as f:
+                html_content = f.read()
+            components.html(html_content, width=1000, height=600)
         else:
-            st.error(f"Map HTML file not found after attempting to create it: {output_file}")
-
+            st.error(f"Map HTML file not created: {output_file}")
 
     else:
         st.warning("No data available to generate the map after applying filters and merging.")
 
 else:
     st.error("Geometry column not found in merged data. Cannot create GeoDataFrame for mapping. Check the shapefile loading and merging steps.")
+
+
+
+
+
+
+
+
