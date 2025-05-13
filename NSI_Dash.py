@@ -59,8 +59,6 @@ st.sidebar.write(" ")
 st.sidebar.write(" ")
 st.sidebar.write(" ")
 st.sidebar.write(" ")
-st.sidebar.write(" ")
-st.sidebar.write(" ")
 st.sidebar.image("static/logo1.png", use_column_width=True)
 
 # Folium Map
@@ -897,7 +895,7 @@ if 'geometry' in merged_data.columns:
         if os.path.exists(output_file):
             with open(output_file, "r") as f:
                 html_content = f.read()
-            components.html(html_content, width=1000, height=800)
+            components.html(html_content, width=1000, height=600)
         else:
             st.error(f"Map HTML file not created: {output_file}")
 
@@ -906,8 +904,6 @@ if 'geometry' in merged_data.columns:
 
 else:
     st.error("Geometry column not found in merged data. Cannot create GeoDataFrame for mapping. Check the shapefile loading and merging steps.")
-
-merged_data.drop(columns='geometry').to_csv('file.csv')
 
 
 
