@@ -778,15 +778,21 @@ if 'geometry' in merged_data.columns:
 
                     panelContent.innerHTML = html;
 
-                    // Zoom to feature only if geometry exists
-                    if (e.target.getBounds) {{
-                         map.fitBounds(e.target.getBounds());
-                    }} else {{
-                         console.warn("Clicked feature has no valid bounds for zooming.");
-                    }}
 
+                    // Very mild zoom behavior - just pan to center without much zoom
+                    var center = e.target.getBounds().getCenter();
+                
+                    // Get the current zoom and only increase slightly, if at all
+                    var currentZoom = map.getZoom();
+                    var newZoom = Math.min(currentZoom + 0.5, 11); // Limit max zoom to 11
+                
+                    // Smoothly pan to the center of the tract with minimal zoom change
+                    map.setView(center, newZoom, {{
+                        animate: true,
+                        duration: 0.8
+                    }});
                 }}
-
+        
                 // Set up the interaction
                 function onEachFeature(feature, layer) {{
                     layer.on({{
@@ -795,6 +801,7 @@ if 'geometry' in merged_data.columns:
                         click: clickFeature
                     }});
                 }}
+
 
                 // Create tract data lookup - Ensure this is available globally in the script
                 var tractDataLookup = {tract_data_json};
